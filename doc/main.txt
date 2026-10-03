@@ -1,0 +1,37 @@
+main.cpp - como foi feita a implementação
+==========================================
+
+Uso de IA: o código e este texto foram produzidos com auxílio de IA
+(Claude).
+
+
+1. Para que serve
+-----------------
+O main.cpp não faz parte dos contratos. Ele foi criado para conferir se
+as classes funcionam: roda exemplos com resultado conhecido e mostra
+[ok] ou [falha] para cada um.
+
+
+2. Como funciona
+----------------
+  - check(condição, nome) imprime o resultado de uma verificação e conta
+    as falhas.
+  - Há uma função para cada módulo: demo_global, demo_vector,
+    demo_transform, demo_rigidbody e demo_collision.
+  - No final aparece "tudo certo!" ou quantas verificações falharam. O
+    programa termina com código 0 se tudo passou e 1 se algo falhou.
+  - Comparações com float usam equals() ou uma tolerância, nunca ==.
+  - No Windows, SetConsoleOutputCP(CP_UTF8) faz os acentos aparecerem
+    certos no terminal.
+
+As funções auxiliares ficam num namespace anônimo, visíveis só neste
+arquivo.
+
+
+3. Como compilar e rodar
+------------------------
+    g++ -std=c++17 -Wall -Wextra source/*.cpp -o demo.exe
+    ./demo.exe
+
+No g++ 6 (MinGW antigo), adicione -Wno-attributes para esconder os
+avisos de [[nodiscard]].

@@ -1,0 +1,88 @@
+Vector2D.cpp - como foi feita a implementação
+==============================================
+
+Uso de IA: o código e este texto foram produzidos com auxílio de IA
+(Claude), partindo apenas do contrato em Vector2D.hpp, fornecido na
+disciplina.
+
+
+1. O que o contrato pedia
+-------------------------
+O header já traz prontas, como constexpr, as funções length_squared(),
+length(), dot() e cross(). Ficaram para o .cpp:
+
+  - normalize() e normalized();
+  - equals();
+  - os operadores +, -, * e /, que devolvem um vetor novo;
+  - os operadores +=, -=, *= e /=, que alteram o próprio vetor;
+  - o operador livre escalar * vetor.
+
+
+2. Ideia central: cada conta escrita uma vez só
+-----------------------------------------------
+A conta de cada operação mora nos operadores compostos (+=, -=, *=, /=).
+Eles alteram x e y e devolvem *this por referência, o que permite
+encadear chamadas, como em (v += a) *= 2.
+
+Os operadores binários apenas reaproveitam essa conta:
+
+    Vector2D sum = *this;    // copia o vetor atual
+    return sum += rhs;       // aplica o composto na cópia
+
+Assim o vetor original não muda (o contrato marca esses operadores como
+const) e, se alguma conta estiver errada, a correção é feita num lugar
+só.
+
+
+3. Divisão
+----------
+O contrato exige |escalar| > EPSILON na divisão. Isso é verificado com
+assert, que interrompe o programa em modo debug se a regra for quebrada.
+
+Em vez de dividir x e y separadamente, o inverso (1 / escalar) é
+calculado uma vez e os dois componentes são multiplicados por ele. Para
+o processador, divisão custa mais que multiplicação, então duas divisões
+viram uma.
+
+O operador / reaproveita o /=, então a verificação vale para os dois.
+
+
+4. Escalar do lado esquerdo
+---------------------------
+Um operador membro sempre tem o próprio vetor à esquerda: "v * 2"
+funciona, mas "2 * v" não. Por isso o contrato declara um operador
+livre, fora da struct. Como a multiplicação por escalar é comutativa,
+ele só troca a ordem e chama vec * scalar.
+
+
+5. Normalização
+---------------
+normalize() calcula o comprimento uma única vez, confere que ele é maior
+que EPSILON (vetor nulo não tem direção) e divide o vetor por ele com /=.
+
+normalized() é a versão que preserva o vetor: faz uma cópia, chama
+normalize() nela e a devolve.
+
+A comparação usa EPSILON, e não zero, porque contas com float acumulam
+pequenos erros. Um vetor "quase nulo" geraria uma direção sem sentido.
+
+
+6. Comparação aproximada
+------------------------
+equals() calcula a diferença entre os dois vetores e confere se cada
+componente dela, em módulo, fica dentro da tolerância (com <=). Com
+tolerância zero, vira uma comparação exata. O valor padrão é o EPSILON
+de Global.hpp.
+
+
+7. Como foi testado
+-------------------
+O main.cpp usa a = (3, 4) e b = (1, 2), que dão resultados fáceis de
+conferir à mão:
+
+  a + b = (4, 6)        a . b = 3*1 + 4*2 = 11
+  a - b = (2, 2)        a x b = 3*2 - 4*1 = 2
+  |a|   = 5             |normalized(a)| = 1
+
+Ele também aplica +=, -=, *= e /= em sequência e confere se o vetor
+volta ao valor inicial.

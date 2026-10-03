@@ -1,0 +1,65 @@
+Collision2D.cpp - como foi feita a implementação
+=================================================
+
+Uso de IA: o código e este texto foram produzidos com auxílio de IA
+(Claude), partindo apenas do contrato em Collision2D.hpp, fornecido na
+disciplina.
+
+
+1. O que o contrato pedia
+-------------------------
+O header define duas structs:
+
+  - AABB: caixa alinhada aos eixos, dada pelos cantos min (superior
+    esquerdo) e max (inferior direito), já que o y cresce para baixo;
+  - Collision2D: o tamanho da caixa de colisão de uma entidade, guardado
+    como metade da largura e metade da altura (halfExtents).
+
+Faltava implementar AABB::intersects e Collision2D::bounds.
+
+
+2. Teste de sobreposição (intersects)
+-------------------------------------
+Duas caixas alinhadas aos eixos se sobrepõem quando as suas projeções se
+sobrepõem no eixo x e também no eixo y. Basta um eixo sem sobreposição
+para não haver colisão.
+
+Assim, o problema 2D vira dois problemas 1D. Para isso foi criada a
+função auxiliar ranges_overlap, que testa os intervalos fechados
+[a_lo, a_hi] e [b_lo, b_hi]:
+
+    a_lo <= b_hi  &&  b_lo <= a_hi
+
+A expressão sai do caso contrário: os intervalos estão separados quando
+um termina antes do outro começar (a_hi < b_lo ou b_hi < a_lo). Negando
+essa condição, chega-se à expressão acima.
+
+O contrato diz que bordas encostadas contam como colisão, por isso a
+comparação usa <= e não <. Se uma caixa termina em x = 32 e a outra
+começa em x = 32, há colisão.
+
+ranges_overlap fica num namespace anônimo, visível só neste arquivo, e é
+chamada uma vez para o eixo x e outra para o eixo y.
+
+
+3. Caixa no mundo (bounds)
+--------------------------
+Collision2D guarda só o tamanho. A posição vem de fora (por exemplo, do
+RigidBody2D da entidade) e é tratada como o centro da caixa. bounds
+expande meia caixa para cada lado:
+
+    min = posição - halfExtents
+    max = posição + halfExtents
+
+Com o valor padrão do header (halfExtents = 32, 32), a caixa tem 64 x 64
+pixels, o tamanho de um tile.
+
+
+4. Como foi testado
+-------------------
+Com uma caixa padrão centrada em (0, 0), que vai de (-32, -32) até
+(32, 32), o main.cpp confere:
+
+  - outra caixa centrada em (32, 32)  ->  colide (sobreposição parcial);
+  - outra caixa centrada em (64, 0)   ->  colide (bordas em x = 32);
+  - outra caixa centrada em (65, 0)   ->  não colide (1 pixel de folga).

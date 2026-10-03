@@ -1,0 +1,98 @@
+Transform2D.cpp - como foi feita a implementação
+=================================================
+
+Uso de IA: o código e este texto foram produzidos com auxílio de IA
+(Claude), partindo apenas do contrato em Transform2D.hpp, fornecido na
+disciplina.
+
+
+1. Regras do contrato
+---------------------
+O header define convenções que a implementação precisa seguir à risca:
+
+  - a matriz é guardada como m[linha][coluna];
+  - vetores são vetores-linha, multiplicados à esquerda: v * M;
+  - um ponto é [x, y, 1] e uma direção é [x, y, 0];
+  - a translação fica na terceira linha (m[2][0] e m[2][1]);
+  - a terceira coluna é sempre [0, 0, 1].
+
+Toda matriz começa como identidade, pelo inicializador do próprio header.
+
+
+2. As três fábricas
+-------------------
+translation, rotation e scale só mexem em seis posições: a parte linear
+2x2 (duas primeiras linhas e colunas) e a translação. Para não repetir
+as mesmas atribuições três vezes, foi criada a função auxiliar
+make_affine(a, b, c, d, tx, ty), que monta:
+
+    | a   b   0 |
+    | c   d   0 |
+    | tx  ty  1 |
+
+Ela fica num namespace anônimo dentro do .cpp, ou seja, só existe nesse
+arquivo. Foi o jeito de criar um auxiliar sem mexer no header, que é o
+contrato.
+
+Com ela, cada fábrica vira uma linha:
+
+  translation(tx, ty)  ->  make_affine(1, 0, 0, 1, tx, ty)
+  scale(sx, sy)        ->  make_affine(sx, 0, 0, sy, 0, 0)
+  rotation(a)          ->  make_affine(cos a, sin a, -sin a, cos a, 0, 0)
+
+Na rotação, cos e sin são calculados uma vez só e guardados em variáveis.
+
+Sobre o sentido da rotação: girar (1, 0) em +90 graus dá (0, 1), ou
+seja, o ângulo positivo leva o eixo x na direção do eixo y. Nos eixos da
+matemática isso é anti-horário. Mas como neste projeto o y cresce para
+baixo (Global.hpp), na tela o giro aparece no sentido horário.
+
+
+3. Composição (operator*)
+-------------------------
+O produto de duas matrizes 3x3 usa dois laços, um para a linha e outro
+para a coluna. A soma dos três produtos de cada célula foi escrita por
+extenso, sem um terceiro laço, porque o tamanho é fixo e assim a fórmula
+fica à vista:
+
+    produto[l][c] = m[l][0] * rhs.m[0][c]
+                  + m[l][1] * rhs.m[1][c]
+                  + m[l][2] * rhs.m[2][c]
+
+Com vetores-linha vale v * (A * B) = (v * A) * B, então A * B aplica A
+primeiro e B depois. A ordem muda o resultado. Para o ponto (1, 1):
+
+  escala(2) * translação(10, 5):  (1, 1) -> (2, 2)  -> (12, 7)
+  translação(10, 5) * escala(2):  (1, 1) -> (11, 6) -> (22, 12)
+
+O operator*= guarda o produto no próprio objeto e devolve uma referência
+para ele.
+
+
+4. Pontos e direções
+--------------------
+transform_vector trata a direção como [x, y, 0]. O zero anula a terceira
+linha, então só a parte linear entra:
+
+    x' = x * m[0][0] + y * m[1][0]
+    y' = x * m[0][1] + y * m[1][1]
+
+transform_point trata o ponto como [x, y, 1]: é a mesma conta da
+direção, mais a terceira linha uma vez. Por isso ele reaproveita
+transform_vector e só soma a translação (m[2][0], m[2][1]).
+
+As duas funções existem porque mover um objeto muda onde ele está
+(ponto), mas não para onde ele aponta (direção).
+
+
+5. Como foi testado
+-------------------
+O main.cpp confere que:
+
+  - translação(10, 5) leva o ponto (1, 1) para (11, 6);
+  - a mesma translação não altera a direção (1, 1);
+  - girar (1, 0) em 90 graus dá (0, 1);
+  - a composição segue a ordem da esquerda para a direita.
+
+Na rotação, o x sai como -0.0000000437 em vez de 0, porque pi em float é
+uma aproximação. Por isso as comparações usam equals() com tolerância.

@@ -1,0 +1,63 @@
+RigidBody2D.cpp - como foi feita a implementação
+=================================================
+
+Uso de IA: o código e este texto foram produzidos com auxílio de IA
+(Claude), partindo apenas do contrato em RigidBody2D.hpp, fornecido na
+disciplina.
+
+
+1. O que o contrato pedia
+-------------------------
+RigidBody2D guarda o estado de movimento de um ponto: posição (pixels),
+velocidade (pixels/s) e aceleração (pixels/s²). Só o método integrate(dt)
+precisava ser implementado. Ele avança o corpo por um passo de tempo dt,
+em segundos.
+
+
+2. Implementação
+----------------
+O próprio header descreve o método (Euler semi-implícito), e o código
+segue essa descrição:
+
+    velocity += acceleration * dt;
+    position += velocity * dt;
+
+Antes disso, um assert confere a pré-condição dt > 0. Com dt zero nada
+se moveria, e com dt negativo o corpo andaria para trás no tempo.
+
+As duas linhas usam os operadores do Vector2D (+= e * por escalar), então
+cada uma atualiza x e y de uma vez.
+
+
+3. Por que a ordem das linhas importa
+-------------------------------------
+No Euler explícito, a posição anda com a velocidade antiga e só depois a
+velocidade muda. No semi-implícito, usado aqui, a velocidade muda
+primeiro e a posição já usa o valor novo.
+
+Exemplo com velocidade (10, 0), aceleração (0, 98) e dt = 0.5:
+
+  velocidade nova:  (10, 0 + 98 * 0.5)          = (10, 49)
+  semi-implícito:   (0, 0) + (10, 49) * 0.5     = (5, 24.5)
+  explícito:        (0, 0) + (10, 0)  * 0.5     = (5, 0)
+
+A diferença parece pequena, mas em movimentos que oscilam, como molas e
+órbitas, o método explícito ganha um pouco de energia a cada passo e o
+movimento sai do controle. O semi-implícito mantém a energia estável,
+por isso é o mais usado em jogos.
+
+
+4. Passo fixo
+-------------
+O header diz que a simulação usa sempre o mesmo dt. Assim, rodar a mesma
+cena duas vezes dá exatamente o mesmo resultado, em qualquer computador.
+
+
+5. Como foi testado
+-------------------
+O main.cpp roda o exemplo acima e confere (10, 49) e (5, 24.5).
+
+Depois simula 1 segundo de queda em 60 passos de 1/60 s. A velocidade
+final é 98, como esperado. A posição fica em 49,82, um pouco acima dos
+49 da fórmula exata (1/2 * 98 * 1²), porque o método é uma aproximação.
+Com passos menores, essa diferença diminui.
