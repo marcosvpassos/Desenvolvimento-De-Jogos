@@ -1,0 +1,128 @@
+TileMap.cpp - como foi feita a implementação
+=============================================
+
+Uso de IA: o código e este texto foram produzidos com auxílio de IA
+(Claude), partindo apenas do contrato em TileMap.hpp, fornecido na
+disciplina.
+
+
+1. O que o contrato pedia
+-------------------------
+TileMap é a matriz de tiles: um inteiro por célula (EMPTY_TILE = 0 ou
+WALL_TILE = 1), guardado linha a linha num std::vector, com
+índice = linha * largura + coluna. A classe precisava:
+
+  - montar a matriz a partir de um Dungeon2D (loadFromDungeon);
+  - salvar e carregar CSV (saveCSV e loadCSV);
+  - responder consultas (width, height, at, isWall, data);
+  - converter entre coordenadas do mundo e células (toIndices, toWorld);
+  - sortear uma célula vazia (randomEmptyCell).
+
+
+2. Da masmorra para a matriz (loadFromDungeon)
+----------------------------------------------
+É a rasterização: transformar retângulos em células. A matriz recebe o
+tamanho da masmorra e é preenchida toda com parede. Depois, cada sala e
+cada corredor cavam suas células como vazias.
+
+As salas ficam só nas folhas da árvore. Em vez de recursão, a árvore é
+percorrida com uma pilha (um std::vector de ponteiros): tira um nó; se
+for folha, cava a sala; senão, empilha os filhos. Os corredores vêm de
+uma lista simples e são cavados um por um.
+
+A função auxiliar carve abre um retângulo inclusivo e ignora o que
+passar da borda da matriz. Com o Dungeon2D deste projeto isso nunca
+acontece, mas protege contra dados montados à mão.
+
+
+3. Salvando em CSV (saveCSV)
+----------------------------
+Cada linha da matriz vira uma linha do arquivo, começando pela linha 0.
+A vírgula é escrita antes de cada valor, menos do primeiro, o que evita
+a vírgula sobrando no fim, proibida pelo contrato.
+
+O arquivo é aberto em modo binário para que o fim de linha seja sempre
+'\n'. Em modo texto, o Windows trocaria por "\r\n" e o arquivo mudaria
+conforme o sistema.
+
+O retorno é false se o arquivo não abrir, se a escrita falhar ou se o
+mapa estiver vazio. Um mapa vazio geraria um arquivo vazio, que o
+loadCSV não aceita, então ele nem é gravado.
+
+
+4. Lendo o CSV (loadCSV)
+------------------------
+O contrato pede que, se a leitura falhar, o mapa fique como estava. Por
+isso tudo é lido em variáveis locais, e os membros só são substituídos
+no final, quando o arquivo inteiro já foi validado.
+
+A leitura é rígida, para aceitar só o formato do saveCSV:
+
+  - cada campo precisa ser um inteiro: sinal opcional e só dígitos, sem
+    espaços ("1, 0" é recusado);
+  - campo vazio é erro, o que pega vírgula no fim e linha em branco;
+  - todas as linhas precisam ter o mesmo número de valores;
+  - arquivo vazio é recusado.
+
+Os campos são separados procurando cada vírgula com find. O std::getline
+com ',' não serviria, porque ele ignora sem avisar a vírgula no fim da
+linha. A conversão para inteiro também é feita à mão, com no máximo 9
+dígitos, para nunca estourar o int.
+
+A única tolerância é um '\r' no fim da linha, para o caso de o arquivo
+ter sido editado num programa do Windows.
+
+
+5. Consultas
+------------
+width, height e data devolvem os membros diretamente. at confere com
+assert se a célula está dentro do mapa (pré-condição do contrato) e lê o
+vetor. isWall reaproveita at e compara com WALL_TILE.
+
+
+6. Mundo e matriz
+-----------------
+toIndices aplica a regra de Global.hpp: col = floor(x / TILE_SIZE) e
+row = floor(y / TILE_SIZE). O floor importa para posições negativas:
+x = -10 fica na coluna -1, e não na 0, como aconteceria convertendo
+direto para int.
+
+toWorld devolve o centro da célula: ((col + 0.5) * TILE_SIZE,
+(row + 0.5) * TILE_SIZE). Como o centro está dentro da célula, aplicar
+toIndices nele devolve a mesma célula.
+
+
+7. Sorteio de célula vazia (randomEmptyCell)
+--------------------------------------------
+Primeiro a função conta quantas células vazias existem. Depois sorteia
+um número k entre 0 e esse total menos 1, e percorre a matriz até achar
+a k-ésima célula vazia. Assim toda célula vazia tem a mesma chance, e o
+tempo não depende de sorte, como aconteceria sorteando células quaisquer
+até cair numa vazia.
+
+O método é const e não recebe semente, então usa um mt19937 guardado
+dentro de uma função (static), criado uma única vez. A semente mistura
+std::random_device com o relógio, porque no MinGW antigo o random_device
+devolve sempre a mesma sequência.
+
+Se não houver célula vazia, o assert avisa em modo debug. Sem assert
+(modo release), a função devolve -1, -1 em vez de travar.
+
+
+8. Como foi testado
+-------------------
+O main.cpp gera a masmorra 60 x 30 com semente 42, desenha o mapa no
+terminal (# parede, . vazio) e confere:
+
+  - a matriz tem o tamanho da masmorra;
+  - célula a célula, a matriz bate com uma segunda rasterização feita de
+    forma independente no próprio teste;
+  - (100, 200) cai na célula (1, 3), e o centro dela é (96, 224);
+  - 1000 sorteios de randomEmptyCell caem sempre em célula vazia;
+  - o CSV salvo tem uma linha de texto para cada linha da matriz e
+    nenhuma vírgula sobrando, e lido de volta é idêntico ao original;
+  - arquivos inválidos (vazio, vírgula no fim, linhas de tamanhos
+    diferentes, letra, espaço, linha em branco) são recusados e o mapa
+    continua igual;
+  - loadCSV devolve false com arquivo inexistente, e saveCSV devolve
+    false com mapa vazio.

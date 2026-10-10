@@ -1,0 +1,127 @@
+Dungeon2D.cpp - como foi feita a implementação
+===============================================
+
+Uso de IA: o código e este texto foram produzidos com auxílio de IA
+(Claude), partindo apenas do contrato em Dungeon2D.hpp, fornecido na
+disciplina.
+
+
+1. O que o contrato pedia
+-------------------------
+Dungeon2D gera a geometria da masmorra com BSP (Binary Space
+Partitioning, ou partição binária do espaço): uma árvore em que cada
+folha guarda uma sala, mais uma lista de corredores. O header impõe três
+regras:
+
+  - corredores com 3 tiles de largura;
+  - salas com no mínimo 5 x 5 tiles;
+  - tudo conectado: de qualquer sala dá para chegar em qualquer outra.
+
+Faltava implementar o construtor e generate(seed).
+
+
+2. Coordenadas inclusivas
+-------------------------
+Rect usa índices de célula, e o header chama (left, top) e
+(right, bottom) de cantos do retângulo. Por isso os dois cantos foram
+tratados como células que fazem parte dele: a largura é
+right - left + 1. Um corredor de 3 tiles, por exemplo, tem
+right - left = 2.
+
+
+3. Dividindo o espaço (BSP)
+---------------------------
+generate começa com uma região do tamanho do mapa inteiro e chama a
+função split, que é recursiva:
+
+  - se a região pode ser cortada, cria dois filhos e divide a região
+    entre eles;
+  - se não pode, o nó vira folha e recebe uma sala.
+
+Uma região pode ser cortada num eixo quando as duas metades ficam com
+pelo menos 7 tiles nesse eixo: 5 da menor sala mais 1 de parede de cada
+lado. Essa parede extra garante que salas vizinhas não se fundam e que a
+borda do mapa fique sempre fechada.
+
+Quando os dois eixos podem ser cortados, o corte vai no lado mais
+comprido, se ele for mais de 25% maior que o outro. Se a região for
+quase quadrada, o eixo é sorteado. Isso evita regiões compridas e finas,
+que virariam salas com cara de corredor.
+
+A posição do corte é sorteada dentro da faixa em que os dois filhos
+respeitam o mínimo de 7 tiles.
+
+
+4. Uma sala em cada folha
+-------------------------
+A função carveRoom sorteia a largura e a altura da sala (de 5 até o
+tamanho da região menos as paredes) e depois a posição dela dentro da
+região. Como a sala nunca encosta na borda da região, sempre sobra
+parede entre ela e as vizinhas.
+
+Os nós internos não recebem sala: o campo room deles fica com o valor
+padrão e não é lido por ninguém.
+
+
+5. Corredores e conectividade
+-----------------------------
+A função connect percorre a árvore de baixo para cima. Em cada nó
+interno, liga uma sala da metade esquerda a uma sala da metade direita.
+Entre todas as combinações, escolhe o par de salas com centros mais
+próximos (distância de Manhattan), para os corredores ficarem curtos.
+
+Esse esquema garante a conectividade por indução:
+
+  - uma folha sozinha é conectada, porque é uma sala só;
+  - se as duas metades de um nó já são conectadas por dentro, um
+    corredor entre elas deixa o nó inteiro conectado;
+  - subindo até a raiz, a masmorra toda fica conectada.
+
+O corredor sai do centro de uma sala e vai até o centro da outra em
+forma de L: um trecho horizontal e um vertical, que se cruzam na curva.
+A ordem dos trechos é sorteada. Cada trecho é um Rect com 3 tiles de
+largura: a linha (ou coluna) do centro e uma de cada lado. Como a sala
+tem pelo menos 5 tiles, essa faixa de 3 sempre cabe dentro dela, então o
+corredor de fato entra na sala. Quando os centros estão alinhados, o
+trecho de tamanho zero é descartado e sobra um corredor reto.
+
+Um corredor pode atravessar outra sala no caminho. Isso não quebra
+nenhuma regra, só cria uma ligação a mais.
+
+
+6. Sorteio reproduzível
+-----------------------
+O gerador é o std::mt19937, iniciado com a semente recebida. Para
+sortear números num intervalo, foi usada uma conta própria (resto da
+divisão) em vez de std::uniform_int_distribution. O motivo: o mt19937
+gera a mesma sequência em qualquer compilador, mas a
+uniform_int_distribution pode ser implementada de jeitos diferentes em
+cada biblioteca. Assim, a mesma semente gera a mesma masmorra no g++,
+no Visual Studio ou no clang. A pequena distorção do resto da divisão é
+desprezível em intervalos tão curtos.
+
+generate também limpa os corredores e recria a raiz, então pode ser
+chamado mais de uma vez no mesmo objeto.
+
+
+7. Mapa pequeno demais
+----------------------
+Com menos de 7 tiles de largura ou altura, não cabe uma sala 5 x 5 com
+parede em volta. Nesse caso generate lança std::invalid_argument, em vez
+de gerar uma masmorra que quebra as regras do header.
+
+
+8. Como foi testado
+-------------------
+O main.cpp gera a masmorra 60 x 30 com semente 42 e confere:
+
+  - cada folha tem sala de 5 x 5 ou mais, dentro da sua região;
+  - os filhos de cada nó ficam dentro do pai e não se sobrepõem;
+  - todo corredor tem exatamente 3 tiles de largura;
+  - a borda do mapa é toda parede;
+  - todo espaço vazio é alcançável: uma busca em largura a partir de
+    uma célula vazia alcança todas as células vazias do mapa;
+  - a mesma semente gera o mesmo mapa, e outra semente gera outro.
+
+Depois repete as verificações em 1400 masmorras: 7 tamanhos (de 7 x 7
+até 200 x 200) com 200 sementes cada. Todas passaram.
